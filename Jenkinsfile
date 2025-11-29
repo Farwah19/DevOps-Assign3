@@ -51,14 +51,8 @@ pipeline {
                 script {
                     echo '========== Stage 4: Deploying Containers =========='
                     sh '''
-                        # Stop and remove old containers
+                        # Stop and remove all compose resources
                         docker-compose down -v || true
-                        
-                        # Kill any processes using port 3306
-                        sudo lsof -ti:3306 | xargs sudo kill -9 || true
-                        
-                        # Remove any dangling containers
-                        docker container prune -f || true
                         
                         # Start new containers
                         docker-compose up -d
@@ -68,10 +62,14 @@ pipeline {
                         
                         # Check if services are running
                         docker-compose ps
+                        
+                        # Show logs
+                        docker-compose logs --tail=50
                     '''
                 }
             }
         }
+        
         
         stage('Selenium Testing') {
             steps {

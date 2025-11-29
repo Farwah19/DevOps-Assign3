@@ -3,7 +3,6 @@ version: '3.8'
 services:
   db:
     image: mysql:8.0
-    container_name: myapp-db
     environment:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: myapp
@@ -21,7 +20,6 @@ services:
 
   app:
     build: .
-    container_name: myapp-web
     ports:
       - "5000:5000"
     environment:
