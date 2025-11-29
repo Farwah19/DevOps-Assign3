@@ -1,26 +1,36 @@
 pipeline {
     agent any
-    
+
     environment {
         DOCKER_IMAGE = "my-web-app"
         DOCKER_TAG = "${BUILD_NUMBER}"
+        VENV = "venv"
     }
-    
+
     stages {
+
         stage('Code Linting') {
             steps {
                 script {
                     echo '========== Stage 1: Code Linting =========='
                     sh '''
-                        python3 -m venv venv
-                        . venv/bin/activate
-                        pip install pylint
+                        # Create virtual environment if it doesn't exist
+                        python3 -m venv ${VENV} || true
+
+                        # Activate virtual environment
+                        . ${VENV}/bin/activate
+
+                        # Upgrade pip, pylint, and astroid inside venv
+                        pip install --upgrade pip
+                        pip install --upgrade pylint astroid
+
+                        # Run pylint on app.py (ignore crashes)
                         pylint app.py --disable=C0111,C0103,W0703 || true
                     '''
                 }
             }
         }
-        
+
         stage('Code Build') {
             steps {
                 script {
@@ -32,45 +42,40 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Unit Testing') {
             steps {
                 script {
                     echo '========== Stage 3: Running Unit Tests =========='
                     sh '''
-                        . venv/bin/activate
+                        . ${VENV}/bin/activate
                         pip install -r requirements.txt
                         pytest tests/test_app.py -v
                     '''
                 }
             }
         }
-        
+
         stage('Containerized Deployment') {
             steps {
                 script {
                     echo '========== Stage 4: Deploying Containers =========='
                     sh '''
-                        # Stop and remove all compose resources
-                        docker-compose down -v || true
+                        # Force stop and remove ALL containers
+                        docker stop $(docker ps -aq) 2>/dev/null || true
+                        docker rm -f $(docker ps -aq) 2>/dev/null || true
                         
-                        # Start new containers
+                        # Now start fresh
                         docker-compose up -d
                         
-                        # Wait for services to be healthy
                         sleep 20
-                        
-                        # Check if services are running
                         docker-compose ps
-                        
-                        # Show logs
                         docker-compose logs --tail=50
                     '''
                 }
             }
         }
-        
-        
+
         stage('Selenium Testing') {
             steps {
                 script {
@@ -78,24 +83,22 @@ pipeline {
                     sh '''
                         # Build Selenium test container
                         docker build -f Dockerfile.selenium -t selenium-tests .
-                        
+
                         # Run Selenium tests in Docker network
-                        docker run --network my-web-app_default \
+                        docker run --rm \
+                            --network my-web-app_default \
                             --name selenium-tests-${BUILD_NUMBER} \
                             selenium-tests || true
-                        
-                        # Cleanup
-                        docker rm selenium-tests-${BUILD_NUMBER} || true
                     '''
                 }
             }
         }
     }
-    
+
     post {
         always {
             echo '========== Pipeline Completed =========='
-            sh 'docker-compose logs app'
+            sh 'docker-compose logs app || true'
         }
         success {
             echo '✓ Pipeline executed successfully!'
