@@ -52,13 +52,19 @@ pipeline {
                     echo '========== Stage 4: Deploying Containers =========='
                     sh '''
                         # Stop and remove old containers
-                        docker-compose down || true
+                        docker-compose down -v || true
+                        
+                        # Kill any processes using port 3306
+                        sudo lsof -ti:3306 | xargs sudo kill -9 || true
+                        
+                        # Remove any dangling containers
+                        docker container prune -f || true
                         
                         # Start new containers
                         docker-compose up -d
                         
                         # Wait for services to be healthy
-                        sleep 15
+                        sleep 20
                         
                         # Check if services are running
                         docker-compose ps
